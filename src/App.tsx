@@ -2,7 +2,6 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "./hooks/useAuth";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { Login } from "./routes/Login";
-import { Signup } from "./routes/Signup";
 import { DashboardLayout } from "./routes/DashboardLayout";
 import { DashboardHome } from "./routes/DashboardHome";
 import { SettingsYalidine } from "./routes/SettingsYalidine";
@@ -18,7 +17,6 @@ function App() {
         <Routes>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/login" element={<Login />} />
-          <Route path="/signup" element={<Signup />} />
           <Route
             path="/dashboard"
             element={

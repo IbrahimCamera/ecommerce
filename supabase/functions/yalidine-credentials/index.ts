@@ -45,7 +45,6 @@ Deno.serve(async (req) => {
   if (userError || !userData.user) {
     return jsonResponse({ error: "Session invalide, reconnectez-vous." }, 401);
   }
-  const merchantId = userData.user.id;
 
   let body: unknown;
   try {
@@ -61,6 +60,13 @@ Deno.serve(async (req) => {
   const { apiId, apiToken } = parsed.data;
 
   const adminClient = createClient(supabaseUrl, serviceRoleKey);
+
+  // Both admin accounts share one business: credentials always belong to the
+  // canonical merchant, regardless of which admin is testing/saving them.
+  const { data: merchantId, error: merchantIdError } = await adminClient.rpc("canonical_merchant_id");
+  if (merchantIdError || !merchantId) {
+    return jsonResponse({ error: "Compte marchand introuvable." }, 500);
+  }
 
   const probe = await yalidineRequest<WilayasProbe>(apiId, apiToken, "/wilayas/?page_size=1");
 

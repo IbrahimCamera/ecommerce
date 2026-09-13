@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../hooks/useAuth";
+import { getCanonicalMerchantId } from "../lib/canonicalMerchant";
 import { landingPageSchema } from "../../shared/schemas/landingPage";
 
 function slugify(value: string): string {
@@ -91,7 +92,6 @@ export function LandingPageEditor() {
 
     setSubmitting(true);
     const payload = {
-      merchant_id: user!.id,
       slug: parsed.data.slug,
       title: parsed.data.title,
       description: parsed.data.description || null,
@@ -100,8 +100,11 @@ export function LandingPageEditor() {
       status: parsed.data.status,
     };
 
+    // Both admin accounts share one business: new pages always belong to the
+    // canonical merchant (the one with Yalidine credentials configured), and
+    // editing an existing page never reassigns its owner.
     const { error: saveError } = isNew
-      ? await supabase.from("landing_pages").insert(payload)
+      ? await supabase.from("landing_pages").insert({ ...payload, merchant_id: await getCanonicalMerchantId() })
       : await supabase.from("landing_pages").update(payload).eq("id", id);
 
     setSubmitting(false);

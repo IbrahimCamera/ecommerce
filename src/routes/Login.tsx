@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
 import { signInSchema } from "../../shared/schemas/auth";
 
@@ -72,13 +72,6 @@ export function Login() {
         >
           {submitting ? "Connexion…" : "Se connecter"}
         </button>
-
-        <p className="text-center text-sm text-slate-500">
-          Pas encore de compte ?{" "}
-          <Link to="/signup" className="font-medium text-slate-900 underline">
-            S'inscrire
-          </Link>
-        </p>
       </form>
     </div>
   );

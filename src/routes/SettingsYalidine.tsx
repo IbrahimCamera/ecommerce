@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../hooks/useAuth";
+import { getCanonicalMerchantId } from "../lib/canonicalMerchant";
 import { yalidineCredentialsInputSchema } from "../../shared/schemas/yalidineCredentials";
 
 interface CredentialsStatus {
@@ -23,13 +24,16 @@ export function SettingsYalidine() {
 
   useEffect(() => {
     if (!user) return;
-    supabase
-      .from("yalidine_credentials")
-      .select("api_id_last4, is_active, last_checked_at, last_check_status, last_check_message")
-      .eq("merchant_id", user.id)
-      .maybeSingle()
+    getCanonicalMerchantId()
+      .then((merchantId) =>
+        supabase
+          .from("yalidine_credentials")
+          .select("api_id_last4, is_active, last_checked_at, last_check_status, last_check_message")
+          .eq("merchant_id", merchantId)
+          .maybeSingle(),
+      )
       .then(({ data }) => {
-        setStatus(data);
+        setStatus(data ?? null);
         setLoadingStatus(false);
       });
   }, [user]);
@@ -79,7 +83,7 @@ export function SettingsYalidine() {
     const { data: refreshed } = await supabase
       .from("yalidine_credentials")
       .select("api_id_last4, is_active, last_checked_at, last_check_status, last_check_message")
-      .eq("merchant_id", user!.id)
+      .eq("merchant_id", await getCanonicalMerchantId())
       .maybeSingle();
     setStatus(refreshed);
   }
