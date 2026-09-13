@@ -91,22 +91,6 @@ export function OrdersList() {
     setSelected((prev) => (prev.size === visibleOrders.length ? new Set() : new Set(visibleOrders.map((o) => o.id))));
   }
 
-  async function handleConfirm() {
-    setBusy(true);
-    setActionError(null);
-    setActionMessage(null);
-    const ids = [...selected].filter((id) => orders.find((o) => o.id === id)?.status === "pending");
-    const { error } = await supabase.from("orders").update({ status: "confirmed" }).in("id", ids);
-    setBusy(false);
-    if (error) {
-      setActionError(error.message);
-      return;
-    }
-    setActionMessage(`${ids.length} commande(s) confirmée(s).`);
-    setSelected(new Set());
-    void refresh();
-  }
-
   async function handleCancel() {
     setBusy(true);
     setActionError(null);
@@ -123,27 +107,21 @@ export function OrdersList() {
     void refresh();
   }
 
-  async function handlePush() {
+  async function handleDelete() {
+    const ids = [...selected].filter((id) => orders.find((o) => o.id === id)?.status !== "pushed");
+    if (ids.length === 0) return;
+    if (!window.confirm(`Supprimer définitivement ${ids.length} commande(s) ? Cette action est irréversible.`)) return;
+
     setBusy(true);
     setActionError(null);
     setActionMessage(null);
-    const ids = [...selected].filter((id) => orders.find((o) => o.id === id)?.status === "confirmed");
-    if (ids.length === 0) {
-      setBusy(false);
-      setActionError("Sélectionnez au moins une commande confirmée.");
-      return;
-    }
-    const { data, error } = await supabase.functions.invoke<{ outcomes: { status: string }[] }>("push-to-yalidine", {
-      body: { orderIds: ids },
-    });
+    const { error } = await supabase.from("orders").delete().in("id", ids);
     setBusy(false);
     if (error) {
       setActionError(error.message);
       return;
     }
-    const pushed = data?.outcomes.filter((o) => o.status === "pushed").length ?? 0;
-    const failed = data?.outcomes.filter((o) => o.status === "failed").length ?? 0;
-    setActionMessage(`${pushed} colis créé(s) chez Yalidine${failed > 0 ? `, ${failed} échec(s)` : ""}.`);
+    setActionMessage(`${ids.length} commande(s) supprimée(s).`);
     setSelected(new Set());
     void refresh();
   }
@@ -171,25 +149,18 @@ export function OrdersList() {
 
       <div className="flex gap-2">
         <button
-          onClick={() => void handleConfirm()}
-          disabled={busy || selected.size === 0}
-          className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-        >
-          Confirmer
-        </button>
-        <button
-          onClick={() => void handlePush()}
-          disabled={busy || selected.size === 0}
-          className="rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
-        >
-          Pousser vers Yalidine
-        </button>
-        <button
           onClick={() => void handleCancel()}
           disabled={busy || selected.size === 0}
           className="rounded-md bg-red-50 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-50"
         >
           Annuler
+        </button>
+        <button
+          onClick={() => void handleDelete()}
+          disabled={busy || selected.size === 0}
+          className="rounded-md bg-white px-3 py-1.5 text-sm font-medium text-red-700 ring-1 ring-red-200 hover:bg-red-50 disabled:opacity-50"
+        >
+          Supprimer
         </button>
       </div>
 

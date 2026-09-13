@@ -115,13 +115,10 @@ Deno.serve(async (req) => {
 
   const publicOrderId = generatePublicOrderId();
 
-  const { data: autoPushSettings } = await admin
-    .from("shipping_settings")
-    .select("auto_push_enabled")
-    .eq("merchant_id", landingPage.merchant_id)
-    .maybeSingle();
-  const autoPush = autoPushSettings?.auto_push_enabled ?? false;
-
+  // Every order is confirmed and pushed to Yalidine immediately — no
+  // per-merchant setting, no manual step. If the push below fails, the order
+  // still lands as "confirmed" (pushOrdersToYalidine moves it to "failed" on
+  // error) and the merchant can retry from the dashboard.
   const { data: insertedOrder, error: insertError } = await admin
     .from("orders")
     .insert({
@@ -140,7 +137,7 @@ Deno.serve(async (req) => {
       stopdesk_center_id: input.isStopdesk ? input.stopdeskCenterId : null,
       price: landingPage.price,
       delivery_fee: deliveryFee,
-      status: autoPush ? "confirmed" : "pending",
+      status: "confirmed",
       ip,
       user_agent: userAgent,
     })
@@ -151,12 +148,10 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: "Impossible d'enregistrer la commande, réessayez." }, 500);
   }
 
-  if (autoPush) {
-    // Best-effort: the order already exists either way. If this fails the
-    // merchant still sees it as "confirmed" in the dashboard and can push it
-    // manually — failure here must not break the buyer's confirmation.
-    await pushOrdersToYalidine(admin, landingPage.merchant_id, [insertedOrder.id]);
-  }
+  // Best-effort: the order already exists either way. A failure here must
+  // not break the buyer's confirmation — the merchant sees it as "failed" in
+  // the dashboard and can retry the push manually.
+  await pushOrdersToYalidine(admin, landingPage.merchant_id, [insertedOrder.id]);
 
   return jsonResponse({ publicOrderId, total: landingPage.price + deliveryFee }, 200);
 });

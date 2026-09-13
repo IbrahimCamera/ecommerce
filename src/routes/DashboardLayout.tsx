@@ -6,7 +6,6 @@ const navItems = [
   { to: "/dashboard", label: "Aperçu", end: true },
   { to: "/dashboard/orders", label: "Commandes", end: false },
   { to: "/dashboard/yalidine", label: "Identifiants Yalidine", end: false },
-  { to: "/dashboard/shipping", label: "Adresse d'expédition", end: false },
   { to: "/dashboard/landing-pages", label: "Landing pages", end: false },
 ];
 
