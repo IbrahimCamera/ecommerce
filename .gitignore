@@ -28,3 +28,4 @@ supabase/.branches
 
 .vercel
 .env*
+.claude/settings.local.json

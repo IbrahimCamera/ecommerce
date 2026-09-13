@@ -67,6 +67,25 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// Reads the "role" claim straight off the bearer JWT instead of
+// string-matching it against SUPABASE_SERVICE_ROLE_KEY: the platform's own
+// verify_jwt gateway (enabled for this function) already checked the token's
+// signature before this code runs, so this only needs to confirm it's a
+// service-role token — sidesteps any drift between the project's legacy vs.
+// new-format service key representations.
+function callerRole(authHeader: string | null): string | null {
+  const token = authHeader?.match(/^Bearer\s+(.+)$/i)?.[1];
+  const payload = token?.split(".")[1];
+  if (!payload) return null;
+  try {
+    const base64 = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
+    return (JSON.parse(atob(padded)) as { role?: string }).role ?? null;
+  } catch {
+    return null;
+  }
+}
+
 async function fetchAllPages<T>(apiId: string, apiToken: string, path: string): Promise<T[]> {
   const items: T[] = [];
   let page = 1;
@@ -236,9 +255,9 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ error: "Configuration serveur manquante." }), { status: 500 });
   }
 
-  // Only pg_cron (or another trusted caller holding the service role key)
+  // Only pg_cron (or another trusted caller holding a service-role token)
   // may trigger this function.
-  if (req.headers.get("Authorization") !== `Bearer ${serviceRoleKey}`) {
+  if (callerRole(req.headers.get("Authorization")) !== "service_role") {
     return new Response(JSON.stringify({ error: "Non autorisé." }), { status: 401 });
   }
 
@@ -322,59 +341,73 @@ Deno.serve(async (req) => {
     );
   }
 
-  // 2. Retry previously failed fee lookups before doing a fresh sweep.
-  await drainFeeRetryQueue(admin);
+  try {
+    // 2. Retry previously failed fee lookups before doing a fresh sweep.
+    await drainFeeRetryQueue(admin);
 
-  // 3. Per-merchant delivery fees (scoped — see migration 0008).
-  const { data: allWilayas } = await admin.from("yalidine_wilayas").select("id, name");
-  const { data: activeMerchants } = await admin
-    .from("yalidine_credentials")
-    .select("merchant_id")
-    .eq("is_active", true);
+    // 3. Per-merchant delivery fees (scoped — see migration 0008).
+    const { data: allWilayas } = await admin.from("yalidine_wilayas").select("id, name");
+    const { data: activeMerchants } = await admin
+      .from("yalidine_credentials")
+      .select("merchant_id")
+      .eq("is_active", true);
 
-  for (const merchant of activeMerchants ?? []) {
-    const { data: settings } = await admin
-      .from("shipping_settings")
-      .select("from_wilaya_id, from_wilaya_name")
-      .eq("merchant_id", merchant.merchant_id)
-      .maybeSingle();
+    for (const merchant of activeMerchants ?? []) {
+      const { data: settings } = await admin
+        .from("shipping_settings")
+        .select("from_wilaya_id, from_wilaya_name")
+        .eq("merchant_id", merchant.merchant_id)
+        .maybeSingle();
 
-    if (!settings) continue; // merchant hasn't configured a shipping origin yet
+      if (!settings) continue; // merchant hasn't configured a shipping origin yet
 
-    const { data: creds } = await admin.rpc("get_decrypted_yalidine_credentials", {
-      p_merchant_id: merchant.merchant_id,
-    });
-    const cred = Array.isArray(creds) ? creds[0] : creds;
-    if (!cred?.api_id || !cred?.api_token) continue;
+      const { data: creds } = await admin.rpc("get_decrypted_yalidine_credentials", {
+        p_merchant_id: merchant.merchant_id,
+      });
+      const cred = Array.isArray(creds) ? creds[0] : creds;
+      if (!cred?.api_id || !cred?.api_token) continue;
 
-    for (const wilaya of allWilayas ?? []) {
-      // Same-wilaya delivery is a real, common route (merchant and buyer in
-      // the same wilaya) — it must be synced too, not skipped.
-      const result = await yalidineRequest<FeesResponse>(
-        cred.api_id,
-        cred.api_token,
-        `/fees/?from_wilaya_id=${settings.from_wilaya_id}&to_wilaya_id=${wilaya.id}`,
-      );
+      for (const wilaya of allWilayas ?? []) {
+        // Same-wilaya delivery is a real, common route (merchant and buyer in
+        // the same wilaya) — it must be synced too, not skipped.
+        const result = await yalidineRequest<FeesResponse>(
+          cred.api_id,
+          cred.api_token,
+          `/fees/?from_wilaya_id=${settings.from_wilaya_id}&to_wilaya_id=${wilaya.id}`,
+        );
 
-      if (!result.ok || !result.data) {
-        await admin.from("yalidine_retry_queue").insert({
-          merchant_id: merchant.merchant_id,
-          task_type: "sync_fees",
-          payload: { from_wilaya_id: settings.from_wilaya_id, to_wilaya_id: wilaya.id },
-          last_error: result.errorMessage,
-        });
-        await logError(admin, merchant.merchant_id, "/fees", result.status, result.errorMessage ?? "Échec de synchronisation des frais.");
-      } else {
-        await upsertDeliveryFee(admin, merchant.merchant_id, settings.from_wilaya_id, wilaya.id, result.data);
-        await recordQuota(admin, merchant.merchant_id, result.quota);
+        if (!result.ok || !result.data) {
+          await admin.from("yalidine_retry_queue").insert({
+            merchant_id: merchant.merchant_id,
+            task_type: "sync_fees",
+            payload: { from_wilaya_id: settings.from_wilaya_id, to_wilaya_id: wilaya.id },
+            last_error: result.errorMessage,
+          });
+          await logError(admin, merchant.merchant_id, "/fees", result.status, result.errorMessage ?? "Échec de synchronisation des frais.");
+        } else {
+          await upsertDeliveryFee(admin, merchant.merchant_id, settings.from_wilaya_id, wilaya.id, result.data);
+          await recordQuota(admin, merchant.merchant_id, result.quota);
+        }
+
+        await sleep(REQUEST_DELAY_MS);
       }
-
-      await sleep(REQUEST_DELAY_MS);
     }
-  }
 
-  return new Response(JSON.stringify({ success: true }), {
-    status: 200,
-    headers: { "Content-Type": "application/json" },
-  });
+    return new Response(JSON.stringify({ success: true }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  } catch (error) {
+    await logError(
+      admin,
+      null,
+      "/fees (sweep)",
+      null,
+      error instanceof Error ? error.message : String(error),
+    );
+    return new Response(JSON.stringify({ error: "Échec de la synchronisation des frais de livraison." }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
 });
