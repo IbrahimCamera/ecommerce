@@ -15,7 +15,7 @@ export const landingPageSchema = z.object({
   description: z.string().trim().max(5000).optional().or(z.literal("")),
   images: z.array(z.string().url()).max(4, "4 images maximum"),
   price: z.number().nonnegative("Le prix doit être positif ou nul"),
-  status: z.enum(["draft", "published"]),
+  status: z.enum(["draft", "published", "out_of_stock"]),
 });
 
 export type LandingPageInput = z.infer<typeof landingPageSchema>;

@@ -26,7 +26,7 @@ export function LandingPageEditor() {
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
   const [images, setImages] = useState<string[]>([]);
-  const [status, setStatus] = useState<"draft" | "published">("draft");
+  const [status, setStatus] = useState<"draft" | "published" | "out_of_stock">("draft");
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -218,10 +218,11 @@ export function LandingPageEditor() {
           <select
             className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
             value={status}
-            onChange={(e) => setStatus(e.target.value as "draft" | "published")}
+            onChange={(e) => setStatus(e.target.value as "draft" | "published" | "out_of_stock")}
           >
             <option value="draft">Brouillon</option>
             <option value="published">Publiée</option>
+            <option value="out_of_stock">Stock épuisé</option>
           </select>
         </div>
 

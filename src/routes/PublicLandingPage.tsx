@@ -8,6 +8,7 @@ interface LandingPageData {
   description: string | null;
   images: string[];
   price: number;
+  status: "published" | "out_of_stock";
 }
 
 interface Wilaya {
@@ -75,9 +76,9 @@ export function PublicLandingPage() {
     if (!slug) return;
     supabase
       .from("landing_pages")
-      .select("title, description, images, price")
+      .select("title, description, images, price, status")
       .eq("slug", slug)
-      .eq("status", "published")
+      .in("status", ["published", "out_of_stock"])
       .maybeSingle()
       .then(({ data }) => {
         if (!data) {
@@ -203,6 +204,11 @@ export function PublicLandingPage() {
       {page.description && <p className="mt-2 whitespace-pre-line text-slate-600">{page.description}</p>}
       <p className="mt-2 text-xl font-semibold text-slate-900">{page.price} DA</p>
 
+      {page.status === "out_of_stock" ? (
+        <p className="mt-6 rounded-lg bg-red-50 p-4 text-center text-sm font-medium text-red-700">
+          Rupture de stock. Cet article n'est plus disponible à la commande pour le moment.
+        </p>
+      ) : (
       <form onSubmit={handleSubmit} className="mt-6 space-y-4 rounded-lg bg-white p-4 shadow-sm">
         <h2 className="text-lg font-semibold text-slate-900">Passer commande</h2>
 
@@ -353,6 +359,7 @@ export function PublicLandingPage() {
           {submitting ? "Envoi…" : "Confirmer la commande"}
         </button>
       </form>
+      )}
     </div>
   );
 }
