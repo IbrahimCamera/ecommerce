@@ -5,7 +5,6 @@ import { Login } from "./routes/Login";
 import { DashboardLayout } from "./routes/DashboardLayout";
 import { DashboardHome } from "./routes/DashboardHome";
 import { SettingsYalidine } from "./routes/SettingsYalidine";
-import { SettingsShipping } from "./routes/SettingsShipping";
 import { LandingPagesList } from "./routes/LandingPagesList";
 import { LandingPageEditor } from "./routes/LandingPageEditor";
 import { PublicLandingPage } from "./routes/PublicLandingPage";
@@ -28,7 +27,6 @@ function App() {
           >
             <Route index element={<DashboardHome />} />
             <Route path="yalidine" element={<SettingsYalidine />} />
-            <Route path="shipping" element={<SettingsShipping />} />
             <Route path="landing-pages" element={<LandingPagesList />} />
             <Route path="landing-pages/:id" element={<LandingPageEditor />} />
             <Route path="orders" element={<OrdersList />} />
