@@ -92,13 +92,20 @@ export function OrdersList() {
   }
 
   async function handleDelete() {
-    const ids = [...selected].filter((id) => orders.find((o) => o.id === id)?.status !== "pushed");
-    if (ids.length === 0) return;
-    if (!window.confirm(`Supprimer définitivement ${ids.length} commande(s) ? Cette action est irréversible.`)) return;
-
-    setBusy(true);
     setActionError(null);
     setActionMessage(null);
+
+    const ids = [...selected];
+    if (ids.length === 0) return;
+
+    const pushedCount = ids.filter((id) => orders.find((o) => o.id === id)?.status === "pushed").length;
+    const confirmMessage =
+      pushedCount > 0
+        ? `Supprimer définitivement ${ids.length} commande(s) ? ${pushedCount} d'entre elles ont déjà été envoyées à Yalidine : le colis restera actif chez le transporteur, mais vous perdrez le suivi (tracking/étiquette) dans l'application. Cette action est irréversible.`
+        : `Supprimer définitivement ${ids.length} commande(s) ? Cette action est irréversible.`;
+    if (!window.confirm(confirmMessage)) return;
+
+    setBusy(true);
     const { error } = await supabase.from("orders").delete().in("id", ids);
     setBusy(false);
     if (error) {
