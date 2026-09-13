@@ -91,22 +91,6 @@ export function OrdersList() {
     setSelected((prev) => (prev.size === visibleOrders.length ? new Set() : new Set(visibleOrders.map((o) => o.id))));
   }
 
-  async function handleCancel() {
-    setBusy(true);
-    setActionError(null);
-    setActionMessage(null);
-    const ids = [...selected].filter((id) => ["pending", "confirmed"].includes(orders.find((o) => o.id === id)?.status ?? ""));
-    const { error } = await supabase.from("orders").update({ status: "cancelled" }).in("id", ids);
-    setBusy(false);
-    if (error) {
-      setActionError(error.message);
-      return;
-    }
-    setActionMessage(`${ids.length} commande(s) annulée(s).`);
-    setSelected(new Set());
-    void refresh();
-  }
-
   async function handleDelete() {
     const ids = [...selected].filter((id) => orders.find((o) => o.id === id)?.status !== "pushed");
     if (ids.length === 0) return;
@@ -148,13 +132,6 @@ export function OrdersList() {
       {actionError && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{actionError}</p>}
 
       <div className="flex gap-2">
-        <button
-          onClick={() => void handleCancel()}
-          disabled={busy || selected.size === 0}
-          className="rounded-md bg-red-50 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-50"
-        >
-          Annuler
-        </button>
         <button
           onClick={() => void handleDelete()}
           disabled={busy || selected.size === 0}
